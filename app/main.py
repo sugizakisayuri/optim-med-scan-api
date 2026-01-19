@@ -1,5 +1,9 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException
 from app.models.ai_model import MockMedicalAI
+from app.utils.logger import setup_logger  # ← 追加: ロガーを読み込み
+
+# ロガーの準備
+logger = setup_logger("medical_api")
 
 app = FastAPI(
     title="Medical Image Analysis API",
@@ -7,7 +11,6 @@ app = FastAPI(
     version="0.1.0"
 )
 
-# AIモデルの準備
 ai_model = MockMedicalAI()
 
 @app.get("/")
@@ -25,16 +28,22 @@ def health_check():
 @app.post("/analyze")
 async def analyze_image(file: UploadFile = File(...)):
     """
-    画像をアップロードし、AI解析結果を返す
+    X線画像をアップロードし、AI解析結果を返す
     """
-    # 1. ファイル形式チェック（画像以外はエラーにする）
+    # ★監査ログ: リクエスト受信を記録
+    logger.info(f"Analysis request received. Filename: {file.filename}, Content-Type: {file.content_type}")
+
+    # 1. ファイル形式チェック
     if not file.content_type.startswith("image/"):
+        logger.warning(f"Invalid file upload attempt: {file.content_type}") # 警告ログ
         raise HTTPException(status_code=400, detail="Invalid file type. Please upload an image.")
 
     # 2. Mock AIモデルで解析
     result = ai_model.analyze(file.filename)
 
-    # 3. 結果を返す
+    # ★監査ログ: 解析結果を記録（これがトレーサビリティになります）
+    logger.info(f"Analysis completed. Diagnosis: {result['diagnosis']}, Confidence: {result['confidence']}")
+
     return {
         "status": "success",
         "analysis_result": result
